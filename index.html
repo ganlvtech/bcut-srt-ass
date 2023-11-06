@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>必剪字幕导出 srt ass 字幕</title>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #000;
+        }
+    </style>
+</head>
+<body>
+<h1>必剪字幕导出 srt ass 字幕</h1>
+<h2>第一步：选择“文档\Bcut Drafts\XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX\??-??-??-???--{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.json”文件：</h2>
+<input type="file" id="file" accept=".json">
+<h2>第二步：导出</h2>
+<div id="download-buttons"><button>导出 srt</button><button>导出 ass</button><button>导出 txt</button><button>导出 csv</button></div>
+<p style="font-weight: bold;">导出效果预览：字幕内容</p>
+<table>
+    <thead>
+    <tr>
+        <th>序号</th>
+        <th>起始时间</th>
+        <th>结束时间</th>
+        <th>字幕内容</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script>
+    /**
+     * @param {File} file
+     * @returns {Promise<string>}
+     */
+    const readFile = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            resolve(reader.result);
+        });
+        reader.readAsText(file);
+    });
+    /**
+     * @param {{tracks: {clips: {AssetInfo: {itemName: string, content: string}, inPoint: number, outPoint: number}[]}[]}} data
+     * @returns {{inPoint: number, outPoint: number, content: string}[]}
+     */
+    const extractSubtitlesFromBcutJson = (data) => data.tracks.map(
+        (track) => track.clips.filter((clip) => clip.AssetInfo.itemName === 'SubttCaption')
+            .map((clip) => ({
+                inPoint: clip.inPoint,
+                outPoint: clip.outPoint,
+                content: clip.AssetInfo.content,
+            }))
+    ).flat();
+    const msToSrtTime = (ms) => `${String(Math.floor(ms / 1000 / 60 / 60)).padStart(2, '0')}:${String(Math.floor(ms / 1000 / 60) % 60).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')},${String(ms % 1000).padStart(3, '0')}`;
+    const msToAssTime = (ms) => `${String(Math.floor(ms / 1000 / 60 / 60)).padStart(2, '0')}:${String(Math.floor(ms / 1000 / 60) % 60).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(Math.floor((ms % 1000) / 10)).padStart(2, '0')}`;
+    const subtitlesToSrt = (subtitles) => subtitles.map(({content, inPoint, outPoint}, i) => `${i + 1}\r\n${msToSrtTime(inPoint)} --> ${msToSrtTime(outPoint)}\r\n${content}\r\n\r\n`).join('');
+    const subtitlesToAss = (subtitles) => `[Script Info]\r\n\r\n[Events]\r\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\r\n${subtitles.map(({content, inPoint, outPoint}, i) => `Dialogue: 0,${msToAssTime(inPoint)},${msToAssTime(outPoint)},Default,,0,0,0,,${content}\r\n`).join('')}`;
+    const subtitlesToTxt = (subtitles) => subtitles.map(({content}) => `${content}\r\n`).join('');
+    const subtitlesToCsv = (subtitles) => `\ufeffStart,End,Text\n${subtitles.map(({content, inPoint, outPoint}) => `${msToAssTime(inPoint)},${msToAssTime(outPoint)},"${content.replace('"', '""')}"\n`).join('')}`;
+    /**
+     * @param {{inPoint: number, outPoint: number, content: string}[]} subtitles
+     * @param {HTMLTableSectionElement} tbody
+     */
+    const subtitlesToTable = (subtitles, tbody) => {
+        subtitles.forEach(({content, inPoint, outPoint}, i) => {
+            const tr = document.createElement('tr');
+            const tds = [
+                document.createElement('td'),
+                document.createElement('td'),
+                document.createElement('td'),
+                document.createElement('td'),
+            ];
+            tds[0].textContent = String(i + 1);
+            tds[1].textContent = msToAssTime(inPoint);
+            tds[2].textContent = msToAssTime(outPoint);
+            tds[3].textContent = content;
+            tr.append(...tds);
+            tbody.append(tr);
+        });
+    };
+    const downloadString = (s, filename) => {
+        const blob = new Blob([s]);
+        saveAs(blob, filename);
+    };
+
+    const tbody = document.querySelector('tbody');
+    document.querySelector("#file").addEventListener('change', (e) => {
+        tbody.innerHTML = '';
+        if (e.target.files.length > 0) {
+            const file = e.target.files[0];
+            readFile(file).then((content) => {
+                const subtitles = extractSubtitlesFromBcutJson(JSON.parse(content));
+                subtitlesToTable(subtitles, tbody);
+                const buttons = [
+                    document.createElement('button'),
+                    document.createElement('button'),
+                    document.createElement('button'),
+                    document.createElement('button'),
+                ];
+                buttons[0].textContent = '导出 srt';
+                buttons[1].textContent = '导出 ass';
+                buttons[2].textContent = '导出 txt';
+                buttons[3].textContent = '导出 csv';
+                buttons[0].addEventListener('click', () => downloadString(subtitlesToSrt(subtitles), 'subtitles.srt'));
+                buttons[1].addEventListener('click', () => downloadString(subtitlesToAss(subtitles), 'subtitles.ass'));
+                buttons[2].addEventListener('click', () => downloadString(subtitlesToTxt(subtitles), 'subtitles.txt'));
+                buttons[3].addEventListener('click', () => downloadString(subtitlesToCsv(subtitles), 'subtitles.csv'));
+                document.querySelector('#download-buttons').innerHTML = '';
+                document.querySelector('#download-buttons').append(...buttons);
+            });
+        }
+    });
+</script>
+</body>
+</html>
