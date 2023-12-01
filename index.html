@@ -33,7 +33,6 @@
     </thead>
     <tbody></tbody>
 </table>
-<script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 <script>
     /**
      * @param {File} file
@@ -85,8 +84,19 @@
             tbody.append(tr);
         });
     };
+    /**
+     * @param {Blob} blob 例如: new Blob([str], { type: 'application/octet-stream' })
+     * @param {string} filename
+     */
+    const saveAs = (blob, filename) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
     const downloadString = (s, filename) => {
-        const blob = new Blob([s]);
+        const blob = new Blob([s], { type: 'application/octet-stream' });
         saveAs(blob, filename);
     };
 
